@@ -1185,13 +1185,16 @@ object SessionPrefs {
                 SessionDisplay.presetHeight(value) != null) return value
             parseResolution(value)?.let { return "${it.first}x${it.second}" }
         }
-        if (!resolutionChosen(context, mode) && !saved.contains("shape")) return SessionDisplay.DEFAULT_RESOLUTION
+        if (!resolutionChosen(context, mode) && !saved.contains("shape")) return defaultResolution(mode)
         val custom = customResolution(context, mode)
         val legacy = SessionDisplay.resolve(panel, resolutionCap(context, mode), shapeMode(context), custom)
         return if (legacy == SessionDisplay.screenSize(panel)) SessionDisplay.MATCH_SCREEN
         else if (custom == null && legacy == SessionDisplay.resolve(panel, legacy.second, SHAPE_AUTO)) "${legacy.second}p"
         else "${legacy.first}x${legacy.second}"
     }
+
+    fun defaultResolution(mode: String): String =
+        SessionDisplay.defaultResolution(mode, com.droiddeck.launcher.core.DeviceSupport.smallGpu())
 
     fun setResolutionChoice(context: Context, mode: String, choice: String) {
         val value = if (choice == SessionDisplay.MATCH_SCREEN || SessionDisplay.isFollow(choice) ||

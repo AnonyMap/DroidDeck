@@ -53,6 +53,17 @@ class SessionDisplayTest {
         assertEquals(2560 to 1440, SessionDisplay.resolveChoice(2560 to 1440, SessionDisplay.MATCH_SCREEN))
     }
 
+    @Test fun aSmallGpuDefaultsSteamTo540pAndListsIt() {
+        assertEquals("540p", SessionDisplay.defaultResolution(SessionService.MODE_STEAM, smallGpu = true))
+        assertEquals("720p", SessionDisplay.defaultResolution(SessionService.MODE_STEAM, smallGpu = false))
+        assertEquals("the desktop keeps 720p", "720p", SessionDisplay.defaultResolution(SessionService.MODE_DESKTOP, smallGpu = true))
+        // Moto G Power 2026: 2388x1080 panel.
+        assertEquals(1194 to 540, SessionDisplay.resolveChoice(2388 to 1080, "540p"))
+        assertEquals(listOf("540p", "720p", "900p", SessionDisplay.MATCH_SCREEN, SessionDisplay.FOLLOW_SCREEN) + scaledFollow,
+            SessionDisplay.resolutionOptions(2388 to 1080, "540p"))
+        assertEquals(SessionDisplay.resolutionOptions(2388 to 1080), SessionDisplay.resolutionOptions(2388 to 1080, "720p"))
+    }
+
     @Test fun unfoldedControlsKeepTheGameSixteenByNineAcrossTheWidth() {
         assertEquals(606, SessionDisplay.unfoldedGameHeight(1080, 1920))
         assertEquals(1376, SessionDisplay.unfoldedGameHeight(2448, 1848))

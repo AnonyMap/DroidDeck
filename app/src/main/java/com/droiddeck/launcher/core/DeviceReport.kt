@@ -222,6 +222,10 @@ object DeviceReport {
             k("TP UBWC mode", hint.activeMode ?: SessionPrefs.TP_UBWC_AUTO)
             if (hint.restartRequired(context)) k("TP UBWC pending", "${SessionPrefs.tpUbwcMode(context)} (restart required)")
         }
+        if (gpu.family.mali) {
+            k("Mali chip", gpu.chip.ifEmpty { "unknown" })
+            k("Mali small GPU", "${DeviceSupport.smallGpu()} (Steam default ${SessionPrefs.defaultResolution(com.droiddeck.launcher.session.SessionService.MODE_STEAM)})")
+        }
         k("Driver mode", SessionPrefs.gpuDriverMode(context) +
             (com.droiddeck.launcher.gpu.DriverPairs.recommendedKey(gpu, com.droiddeck.launcher.gpu.DriverPairs.from(
                 com.droiddeck.launcher.gpu.TurnipReleases.cached(context)), com.droiddeck.launcher.gpu.TurnipReleases.autoPicks(context),

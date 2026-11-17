@@ -28,6 +28,15 @@ object DeviceSupport {
             com.droiddeck.launcher.gpu.GpuInfo.detect().family.name.startsWith("MALI"))
     }
 
+    /** A Mali with at most three shader cores (Mali-G57 MC2 and the like). */
+    fun smallGpu(): Boolean = isSmallGpu
+
+    private val isSmallGpu by lazy {
+        !adreno() && com.droiddeck.launcher.gpu.GpuInfo.detect().let {
+            it.family.mali && com.droiddeck.launcher.gpu.GpuInfo.smallMali(it.name, it.chip)
+        }
+    }
+
     fun bridgeUsable(): Boolean = !adreno() && !SystemVulkanDriver.isAvailable() && File("/dev/mali0").exists()
 
     fun openDriverActive(context: Context): Boolean {

@@ -15,11 +15,12 @@ fun ResolutionRow(
     host: MenuHost, choice: String, panel: Pair<Int, Int>, onPick: (String) -> Unit,
     chipModifier: Modifier = Modifier,
     portrait: Boolean = false,
+    default: String = SessionDisplay.DEFAULT_RESOLUTION,
 ) {
     val custom = "custom"
     val size = SessionDisplay.resolveChoice(panel, choice, portrait)
     val screen = SessionDisplay.resolveChoice(panel, SessionDisplay.MATCH_SCREEN, portrait)
-    val choices = SessionDisplay.resolutionOptions(panel)
+    val choices = SessionDisplay.resolutionOptions(panel, default)
     val customFollow = SessionDisplay.isFollow(choice) && choice !in choices
     val selected = if (SessionDisplay.isFollow(choice)) choice
         else if (size == screen) SessionDisplay.MATCH_SCREEN else choice
@@ -31,7 +32,7 @@ fun ResolutionRow(
         else if (value == SessionDisplay.FOLLOW_SCREEN) stringResource(R.string.display_follow_screen)
         else if (SessionDisplay.isFollow(value)) stringResource(R.string.display_follow_screen_scaled,
             SessionDisplay.formatScale(SessionDisplay.followScale(value) ?: 1f)) + " (${dimensions.first}×${dimensions.second})"
-        else if (value == SessionDisplay.DEFAULT_RESOLUTION) stringResource(R.string.mode_res_default, "${dimensions.first}×${dimensions.second}")
+        else if (value == default) stringResource(R.string.mode_res_default, "${dimensions.first}×${dimensions.second}")
         else "${dimensions.first}×${dimensions.second}"
     } + listOf(SessionDisplay.FOLLOW_CUSTOM to stringResource(R.string.display_follow_screen_scaled,
         if (customFollow) SessionDisplay.formatScale(SessionDisplay.followScale(choice) ?: 1f) else "…"

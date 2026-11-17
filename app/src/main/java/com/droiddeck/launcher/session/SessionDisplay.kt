@@ -13,7 +13,12 @@ object SessionDisplay {
     private const val FOLLOW_SCALED_PREFIX = "follow/"
 
     const val DEFAULT_RESOLUTION = "720p"
+    /** Steam's default on a GPU with at most three shader cores (DeviceSupport.smallGpu). */
+    const val SMALL_GPU_RESOLUTION = "540p"
     private val PRESET_HEIGHTS = listOf(720, 900, 1080)
+
+    fun defaultResolution(mode: String, smallGpu: Boolean): String =
+        if (smallGpu && mode == SessionService.MODE_STEAM) SMALL_GPU_RESOLUTION else DEFAULT_RESOLUTION
 
     fun presetHeight(choice: String): Int? =
         if (choice.endsWith("p")) choice.dropLast(1).toIntOrNull()?.takeIf { it > 0 } else null
@@ -48,9 +53,10 @@ object SessionDisplay {
         else orient(resolve(panel, 720, SessionPrefs.SHAPE_AUTO))
     }
 
-    fun resolutionOptions(panel: Pair<Int, Int>): List<String> {
+    fun resolutionOptions(panel: Pair<Int, Int>, default: String = DEFAULT_RESOLUTION): List<String> {
         val panelHeight = minOf(panel.first, panel.second)
-        return PRESET_HEIGHTS.filter { it <= panelHeight }.map { "${it}p" }
+        return (PRESET_HEIGHTS + listOfNotNull(presetHeight(default))).distinct().sorted()
+            .filter { it <= panelHeight }.map { "${it}p" }
             .filter { resolveChoice(panel, it) != screenSize(panel) } + MATCH_SCREEN + FOLLOW_SCREEN + FOLLOW_SCALES.map(::followScaled)
     }
 
