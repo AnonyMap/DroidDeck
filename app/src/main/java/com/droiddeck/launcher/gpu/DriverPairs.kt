@@ -129,7 +129,7 @@ object DriverPairs {
             }
             Family.MALI_OTHER, Family.NOT_ADRENO -> return null
             Family.MALI_JM, Family.MALI_G610_G710, Family.MALI_G615, Family.MALI_G720, Family.MALI_LATEST ->
-                return maliKey(gpu, pairs, sdk)
+                return maliKey(gpu, pairs, rules, bad, sdk, blob)
             else -> Unit
         }
         val keys = AutoPicks.preferences(gpu, rules, sdk, blob)
@@ -139,7 +139,13 @@ object DriverPairs {
             ?: keys.firstOrNull()
     }
 
-    private fun maliKey(gpu: GpuInfo, pairs: List<DriverPair>, sdk: Int): String? {
+    /**
+     * A Mali's open driver pair: a rule's preferences first (only open Mali pairs that suit it),
+     * then the one-binary kbase build where it covers the GPU, then the per-generation pair.
+     * A release marked [bad] gives way to the next listed pair. When every listed one is bad the
+     * first of them is named, so Auto reports it and puts its stand-in route on.
+     */
+    private fun maliKey(gpu: GpuInfo, pairs: List<DriverPair>, rules: List<AutoPicks.Rule>, bad: Set<String>, sdk: Int, blob: Int?): String? {
         val family = when (gpu.family) {
             Family.MALI_JM -> NAD_MALI_JM
             Family.MALI_G610_G710 -> NAD_MALI_G710
@@ -148,9 +154,16 @@ object DriverPairs {
             else -> null
         }
         val kbase = NAD_MALI_KBASE.takeIf { sdk >= MALI_KBASE_MIN_SDK && GpuInfo.maliKbaseCovered(gpu.name) }
-        if (pairs.isEmpty()) return kbase ?: family
-        fun listed(key: String?) = key?.takeIf { k -> pairs.any { it.key == k && it.complete } }
-        return listed(kbase) ?: listed(family) ?: kbase ?: family
+        val ruled = AutoPicks.preferences(gpu, rules, sdk, blob).filter { key ->
+            key.startsWith("$NON_ADRENO:") && describeNonAdreno(key).let { (name, families) ->
+                DriverPair(key, name, families, null, null).suits(gpu)
+            }
+        }
+        val keys = (ruled + listOfNotNull(kbase, family)).distinct()
+        if (pairs.isEmpty()) return keys.firstOrNull()
+        fun listed(key: String) = pairs.any { it.key == key && it.complete }
+        fun usable(key: String) = pairs.any { it.key == key && it.complete && AutoDriverTrial.release(it) !in bad }
+        return keys.firstOrNull(::usable) ?: keys.firstOrNull(::listed) ?: keys.firstOrNull()
     }
 
     fun newestDdTurnip(pairs: List<DriverPair>): String? = pairs

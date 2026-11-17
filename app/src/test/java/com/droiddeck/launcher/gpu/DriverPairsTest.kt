@@ -259,6 +259,75 @@ class DriverPairsTest {
     }
 
     @Test
+    fun aMediaTekChipIsKnownWhateverSuffixThePlatformGivesIt() {
+        // The Dimensity 6300 (Moto G Power 2026) is MT6835, MT6835T or MT6835V/TZB.
+        for (id in listOf("MT6835", "MT6835T", "mt6835v/tzb", " MT6835T "))
+            assertEquals("Mali-G57 (by chip mt6835)", GpuInfo.maliOfSoc(listOf(id)))
+        assertEquals("Mali-G57 (by chip mt6781)", GpuInfo.maliOfSoc(listOf("MT6781")))
+        assertEquals("mt6835", GpuInfo.chipOf(listOf("MT6835T", "mt6835", "k6835v1_64")))
+        assertEquals("mt6835", GpuInfo.chipOf(listOf("unknown-board", "MT6835V/TZB")))
+        assertEquals("gs201", GpuInfo.chipKey("GS201"))
+        assertEquals("", GpuInfo.chipOf(emptyList()))
+    }
+
+    @Test
+    fun aSmallMaliIsKnownByItsCoreCountOrItsChip() {
+        assertEquals(2, GpuInfo.maliCores("Mali-G57 MC2"))
+        assertEquals(12, GpuInfo.maliCores("Mali-G720-Immortalis MC12"))
+        assertEquals(null, GpuInfo.maliCores("Mali-G57"))
+        assertTrue(GpuInfo.smallMali("Mali-G57 MC2"))
+        assertTrue(GpuInfo.smallMali("Mali-G52 MP2"))
+        assertFalse(GpuInfo.smallMali("Mali-G57 MC5"))
+        assertFalse(GpuInfo.smallMali("Mali-G615 MC6", chip = "mt6835"))
+        assertTrue(GpuInfo.smallMali("Mali-G57 (by chip mt6835)"))
+        assertTrue(GpuInfo.smallMali("Mali-G57", chip = "mt6835"))
+        assertFalse("Kompanio 1200's G57 has five cores", GpuInfo.smallMali("Mali-G57 (by chip mt8195)"))
+        assertFalse(GpuInfo.smallMali("Mali-G57"))
+    }
+
+    @Test
+    fun aMaliPairMarkedBadGivesWayToTheNextListedPair() {
+        fun bundle(id: String) = TurnipReleases.Asset("Non-Adreno", id.lowercase(), "$id-Pair.zip", "https://example/$id", 9_000_000,
+            false, "label", "0".repeat(64), DriverPairs.nonAdreno(id), bundle = true)
+        val pairs = DriverPairs.from(TurnipReleases.Check(
+            listOf(bundle("PanVK-Mali-kbase"), bundle("PanVK-Mali-JM")), emptyList(), emptyList(), 0L))
+        val g57 = GpuInfo("Mali-G57 MC2", 0, Family.MALI_JM, "", false, chip = "mt6835")
+        val kbase = pairs.single { it.key == DriverPairs.NAD_MALI_KBASE }
+        val jm = pairs.single { it.key == DriverPairs.NAD_MALI_JM }
+        assertEquals(DriverPairs.NAD_MALI_KBASE, DriverPairs.recommendedKey(g57, pairs, sdk = 36))
+        assertEquals(DriverPairs.NAD_MALI_JM, DriverPairs.recommendedKey(g57, pairs, bad = setOf(AutoDriverTrial.release(kbase)), sdk = 36))
+        // Both bad: the first is still named, so Auto reports it and its stand-in route goes on.
+        assertEquals(DriverPairs.NAD_MALI_KBASE, DriverPairs.recommendedKey(g57, pairs,
+            bad = setOf(AutoDriverTrial.release(kbase), AutoDriverTrial.release(jm)), sdk = 36))
+        // A bad release with no other listed pair is unchanged: Auto skips it itself.
+        assertEquals(DriverPairs.NAD_MALI_KBASE, DriverPairs.recommendedKey(g57, pairs.filter { it == kbase },
+            bad = setOf(AutoDriverTrial.release(kbase)), sdk = 36))
+    }
+
+    @Test
+    fun aRuleCanPickAMaliPairForOneChipButNotOneThatDoesNotSuitIt() {
+        fun bundle(id: String) = TurnipReleases.Asset("Non-Adreno", id.lowercase(), "$id-Pair.zip", "https://example/$id", 9_000_000,
+            false, "label", "0".repeat(64), DriverPairs.nonAdreno(id), bundle = true)
+        val pairs = DriverPairs.from(TurnipReleases.Check(
+            listOf(bundle("PanVK-Mali-kbase"), bundle("PanVK-Mali-JM"), bundle("PanVK-Mali-G720")), emptyList(), emptyList(), 0L))
+        val rules = listOf(
+            AutoPicks.Rule(setOf(Family.MALI_JM), chips = setOf("mt6835"), prefer = listOf(DriverPairs.NAD_MALI_JM)),
+            AutoPicks.Rule(setOf(Family.MALI_JM), chips = setOf("mt6789"), prefer = listOf(DriverPairs.NAD_MALI_G720, "banner")),
+        )
+        val moto = GpuInfo("Mali-G57 MC2", 0, Family.MALI_JM, "", false, chip = "mt6835")
+        val g99 = GpuInfo("Mali-G57 MC2", 0, Family.MALI_JM, "", false, chip = "mt6789")
+        val other = GpuInfo("Mali-G57 MC2", 0, Family.MALI_JM, "", false, chip = "mt6833")
+        assertEquals(DriverPairs.NAD_MALI_JM, DriverPairs.recommendedKey(moto, pairs, rules, sdk = 36))
+        assertEquals(DriverPairs.NAD_MALI_JM, DriverPairs.recommendedKey(moto, emptyList(), rules, sdk = 36))
+        assertEquals("a G720 pair and a Turnip key are no picks for a G57",
+            DriverPairs.NAD_MALI_KBASE, DriverPairs.recommendedKey(g99, pairs, rules, sdk = 36))
+        assertEquals(DriverPairs.NAD_MALI_KBASE, DriverPairs.recommendedKey(other, pairs, rules, sdk = 36))
+        // The rule's pick marked bad: the built-in order again.
+        val jm = pairs.single { it.key == DriverPairs.NAD_MALI_JM }
+        assertEquals(DriverPairs.NAD_MALI_KBASE, DriverPairs.recommendedKey(moto, pairs, rules, bad = setOf(AutoDriverTrial.release(jm)), sdk = 36))
+    }
+
+    @Test
     fun theMaliG1SeriesHasNoPanVkPairAndIsKnownByItsChip() {
         // Arch v14 (Dimensity 9500): no PanVK build is proven there, so Auto uses the phone's own driver.
         assertEquals("Mali-G1-Ultra (by chip mt6993)", GpuInfo.maliOfSoc(listOf("MT6993")))

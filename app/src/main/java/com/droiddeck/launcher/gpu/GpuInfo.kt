@@ -17,6 +17,8 @@ data class GpuInfo(
     val kgslChipId: String = "",
     val platformGpuModel: Int = 0,
     val verifiedDevice: Boolean = false,
+    /** The chip as [chipKey] names it ("mt6835"); empty on Adreno and when the platform names none. */
+    val chip: String = "",
 ) {
     enum class Family(val label: String) {
         A8XX("Adreno 8xx"),
@@ -131,6 +133,7 @@ data class GpuInfo(
                 kgslName = raw.orEmpty(), modelSource = source, kgslChipId = chipId,
                 platformGpuModel = platformGpuModel,
                 verifiedDevice = adreno && verifiedOn(model, Build.MODEL),
+                chip = if (adreno) "" else chipOf(socIds()),
             )
         }
 
@@ -179,6 +182,10 @@ data class GpuInfo(
                 ?: maliOfSoc(socIds())
                 ?: ""
 
+        /** The first of [ids] the Mali table knows, else the first one given, as [chipKey] names it. */
+        internal fun chipOf(ids: List<String>): String =
+            ids.map(::chipKey).let { keys -> keys.firstOrNull { it in MALI_SOCS } ?: keys.firstOrNull().orEmpty() }
+
         /** The chip's names as the platform gives them: "mt6989", "MT6989", "gs201". */
         private fun socIds(): List<String> = listOfNotNull(
             if (Build.VERSION.SDK_INT >= 31) Build.SOC_MODEL else null,
@@ -192,14 +199,41 @@ data class GpuInfo(
             "mt6896" to "Mali-G610", "mt6886" to "Mali-G610", "mt6893" to "Mali-G77", "mt6891" to "Mali-G77",
             "mt6889" to "Mali-G77", "mt6885" to "Mali-G77", "mt6877" to "Mali-G68", "mt6853" to "Mali-G57",
             "mt6833" to "Mali-G57", "mt6835" to "Mali-G57", "mt6789" to "Mali-G57", "mt6785" to "Mali-G76",
-            "mt6781" to "Mali-G52", "mt6769" to "Mali-G52", "mt8192" to "Mali-G57", "mt8195" to "Mali-G57",
+            "mt6781" to "Mali-G57", "mt6769" to "Mali-G52", "mt8192" to "Mali-G57", "mt8195" to "Mali-G57",
             "gs101" to "Mali-G78", "gs201" to "Mali-G710", "zuma" to "Mali-G715", "zumapro" to "Mali-G715",
             "s5e8835" to "Mali-G68", "s5e8825" to "Mali-G68",
         )
 
         /** The Mali [ids] name a chip of, "Mali-G720 (by chip mt6989)", or null for an unknown chip. */
         internal fun maliOfSoc(ids: List<String>): String? = ids.firstNotNullOfOrNull { id ->
-            MALI_SOCS[id.trim().lowercase()]?.let { "$it (by chip ${id.trim().lowercase()})" }
+            chipKey(id).let { key -> MALI_SOCS[key]?.let { "$it (by chip $key)" } }
+        }
+
+        /**
+         * A chip id as [MALI_SOCS] keys it. MediaTek names one die with suffixes ("MT6835T",
+         * "MT6835V/TZB" for the Dimensity 6300); every suffix of a die in the table has its GPU.
+         */
+        internal fun chipKey(id: String): String = id.trim().lowercase().let { s ->
+            Regex("""^(mt\d{4})""").find(s)?.groupValues?.get(1) ?: s
+        }
+
+        /** The chip a Mali was named by ("mt6835" in "Mali-G57 (by chip mt6835)"), or null. */
+        internal fun namedChip(name: String): String? = Regex("""\(by chip ([^)]+)\)""").find(name)?.groupValues?.get(1)
+
+        /** The shader core count in a Mali's name: 2 for "Mali-G57 MC2", null when it names none. */
+        fun maliCores(name: String): Int? =
+            Regex("""\b(?:MC|MP)(\d{1,2})\b""", RegexOption.IGNORE_CASE).find(name)?.groupValues?.get(1)?.toIntOrNull()
+
+        /** Chips whose only Mali has at most three cores, for names that do not carry the count. */
+        private val SMALL_MALI_CHIPS = setOf("mt6835", "mt6833", "mt6789", "mt6781", "mt6769", "mt6853")
+
+        /**
+         * A Mali with at most three shader cores (G57 MC2 in the Dimensity 6300 and Helio G99,
+         * G52 MC2 in the Helio G85): by the count in its name, else by the chip it is known by.
+         */
+        fun smallMali(name: String, chip: String = ""): Boolean {
+            maliCores(name)?.let { return it <= 3 }
+            return (namedChip(name) ?: chip).let { it.isNotEmpty() && chipKey(it) in SMALL_MALI_CHIPS }
         }
 
         /** The number in a Mali's name: 720 for "Mali-G720-Immortalis MC12". */

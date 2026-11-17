@@ -55,6 +55,18 @@ class AutoPicksTest {
         assertEquals(744, AutoPicks.blobVersion("512.744.0"))
     }
 
+    @Test fun aRuleNamesChipsAsThePlatformDoes() {
+        val rules = AutoPicks.parse("""
+            {"schemaVersion": 1, "rules": [
+              {"families": ["MALI_JM"], "chips": ["MT6835T", "mt6789"], "prefer": ["nad:panvk-mali-jm"]}
+            ]}
+        """.trimIndent())!!
+        assertEquals(setOf("mt6835", "mt6789"), rules.single().chips)
+        val moto = GpuInfo("Mali-G57 MC2", 0, GpuInfo.Family.MALI_JM, "", false, chip = "mt6835")
+        assertEquals(DriverPairs.NAD_MALI_JM, DriverPairs.recommendedKey(moto, emptyList(), rules, sdk = 36))
+        assertEquals(DriverPairs.NAD_MALI_KBASE, DriverPairs.recommendedKey(moto.copy(chip = "mt6833"), emptyList(), rules, sdk = 36))
+    }
+
     @Test fun aGpuTheManifestDoesNotCoverUsesTheBuiltInTable() {
         assertEquals(DriverPairs.ddTurnip("DD-Turnip-v0.3.0"), DriverPairs.recommendedKey(gpu(830), pairs, AutoPicks.parse(manifest)!!))
     }

@@ -17,10 +17,13 @@ object AutoPicks {
         val blobMin: Int = 0,
         val blobMax: Int = Int.MAX_VALUE,
         val prefer: List<String>,
+        /** Chip ids as [GpuInfo.chipKey] names them ("mt6835"); empty for any chip. */
+        val chips: Set<String> = emptySet(),
     ) {
         fun matches(gpu: GpuInfo, sdk: Int, blob: Int?): Boolean =
             gpu.family in families &&
                 (models.isEmpty() || gpu.model in models) &&
+                (chips.isEmpty() || gpu.chip in chips) &&
                 (oneUi8Gen2 == null || gpu.oneUi8Gen2 == oneUi8Gen2) &&
                 sdk >= minSdk &&
                 (blobMin == 0 && blobMax == Int.MAX_VALUE || blob != null && blob in blobMin..blobMax)
@@ -52,6 +55,7 @@ object AutoPicks {
             families, models,
             if (o.has("oneUi8Gen2")) o.getBoolean("oneUi8Gen2") else null,
             o.optInt("minSdk", 0), o.optInt("blobMin", 0), o.optInt("blobMax", Int.MAX_VALUE), prefer,
+            strings(o.optJSONArray("chips")).map(GpuInfo::chipKey).toSet(),
         )
     }
 
