@@ -1,6 +1,6 @@
 #!/usr/bin/bash
 set -euxo pipefail
-VERSION=${FEX_VERSION:-FEX-2610}
+VERSION=${FEX_VERSION:-FEX-2611}
 WORK=/work
 cd "$WORK"
 grep -q '^DisableSandbox' /etc/pacman.conf || sed -i 's/^\[options\]/[options]\nDisableSandbox/' /etc/pacman.conf
