@@ -591,6 +591,30 @@ def game_images(env):
     return True
 
 
+def cpu_has_lse2(cpuinfo="/proc/cpuinfo"):
+    """Whether every core lists LSE2 ("uscat"); None where the kernel lists no arm64 features."""
+    try:
+        with open(cpuinfo, encoding="utf-8", errors="replace") as source:
+            features = [line.split(":", 1)[1].split() for line in source
+                        if ":" in line and line.split(":", 1)[0].strip() == "Features"]
+    except OSError:
+        return None
+    return all("uscat" in names for names in features) if features else None
+
+
+def fex_half_barrier(env, game, lse2=None):
+    # Without FEAT_LSE2 every unaligned LDAPR/STLR alignment-faults, and FEX's non-atomic handler
+    # rewrites that instruction into a plain LDR/STR for every later run, aligned or not. The half
+    # barrier keeps a DMB beside it. A game's own setting wins.
+    if "FEX_HALFBARRIERTSOENABLED" in game or env.get("FEX_HALFBARRIERTSOENABLED") != "0" or env.get("FEX_TSOENABLED") == "0":
+        return env
+    if (cpu_has_lse2() if lse2 is None else lse2) is not False:
+        return env
+    env["FEX_HALFBARRIERTSOENABLED"] = "1"
+    env["DROIDDECK_FEX_HALF_BARRIER"] = "no-lse2"
+    return env
+
+
 def apply_config(env, config, app_id, fixes=None):
     if config.get("version") != 1:
         raise ValueError("unsupported environment configuration")
@@ -600,7 +624,7 @@ def apply_config(env, config, app_id, fixes=None):
         if name == "WINEDLLOVERRIDES" and entries.get(name, env.get(name)):
             value = entries.get(name, env.get(name)) + ";" + value
         entries[name] = value
-    game = config.get("games", {}).get(app_id, {})
+    game = config.get("games", {}).get(app_id, {}) or {}
     fix = (fixes or {}).get("WINEDLLOVERRIDES")
     if fix and isinstance(game.get("WINEDLLOVERRIDES"), str):
         own = game["WINEDLLOVERRIDES"]
@@ -619,6 +643,7 @@ def apply_config(env, config, app_id, fixes=None):
             result[name] = value
         else:
             raise ValueError("invalid environment value")
+    fex_half_barrier(result, game)
     game_dxvk = config.get("dxvkConfigGames", {})
     if not isinstance(game_dxvk, dict):
         raise ValueError("invalid game dxvk configuration")

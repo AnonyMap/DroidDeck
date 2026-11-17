@@ -20,6 +20,47 @@ STATE = tempfile.TemporaryDirectory()
 COMPAT["main"].__globals__["COMPAT_DIR"] = STATE.name
 
 
+class FexHalfBarrierTest(unittest.TestCase):
+    A76 = "processor\t: 0\nFeatures\t: fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm lrcpc dcpop asimddp\n"
+    V9 = "processor\t: 0\nFeatures\t: fp asimd atomics lrcpc dcpop asimddp uscat ilrcpc flagm sb\n"
+
+    def cpuinfo(self, text):
+        path = Path(tempfile.mkdtemp()) / "cpuinfo"
+        path.write_text(text)
+        return str(path)
+
+    def test_reads_lse2_from_every_core(self):
+        self.assertFalse(MODULE["cpu_has_lse2"](self.cpuinfo(self.A76)))
+        self.assertTrue(MODULE["cpu_has_lse2"](self.cpuinfo(self.V9)))
+        self.assertFalse(MODULE["cpu_has_lse2"](self.cpuinfo(self.V9 + self.A76.replace("0", "1", 1))))
+        self.assertIsNone(MODULE["cpu_has_lse2"](self.cpuinfo("processor\t: 0\nflags\t: fpu sse2\n")))
+        self.assertIsNone(MODULE["cpu_has_lse2"]("/nonexistent/cpuinfo"))
+
+    def test_keeps_the_half_barrier_on_a_cpu_without_lse2(self):
+        preset = {"FEX_TSOENABLED": "1", "FEX_HALFBARRIERTSOENABLED": "0"}
+        env = MODULE["fex_half_barrier"](dict(preset), {}, lse2=False)
+        self.assertEqual("1", env["FEX_HALFBARRIERTSOENABLED"])
+        self.assertEqual("no-lse2", env["DROIDDECK_FEX_HALF_BARRIER"])
+        self.assertEqual(preset, MODULE["fex_half_barrier"](dict(preset), {}, lse2=True))
+        self.assertEqual(preset, MODULE["fex_half_barrier"](dict(preset), {}, lse2=None))
+
+    def test_leaves_a_games_own_setting_and_tso_off_alone(self):
+        preset = {"FEX_TSOENABLED": "1", "FEX_HALFBARRIERTSOENABLED": "0"}
+        self.assertEqual(preset, MODULE["fex_half_barrier"](dict(preset), {"FEX_HALFBARRIERTSOENABLED": "0"}, lse2=False))
+        off = {"FEX_TSOENABLED": "0", "FEX_HALFBARRIERTSOENABLED": "0"}
+        self.assertEqual(off, MODULE["fex_half_barrier"](dict(off), {}, lse2=False))
+        self.assertEqual({}, MODULE["fex_half_barrier"]({}, {}, lse2=False))
+
+    def test_apply_config_turns_the_shared_preset_half_barrier_on_without_lse2(self):
+        config = {"version": 1, "shared": {"FEX_TSOENABLED": "1", "FEX_HALFBARRIERTSOENABLED": "0"},
+                  "games": {"42": {"FEX_HALFBARRIERTSOENABLED": "0"}}}
+        with patch.dict(MODULE["apply_config"].__globals__, {"cpu_has_lse2": lambda: False}):
+            self.assertEqual("1", MODULE["apply_config"]({}, config, "7")["FEX_HALFBARRIERTSOENABLED"])
+            self.assertEqual("0", MODULE["apply_config"]({}, config, "42")["FEX_HALFBARRIERTSOENABLED"])
+        with patch.dict(MODULE["apply_config"].__globals__, {"cpu_has_lse2": lambda: True}):
+            self.assertEqual("0", MODULE["apply_config"]({}, config, "7")["FEX_HALFBARRIERTSOENABLED"])
+
+
 class SupergiantDotnetReporterTest(unittest.TestCase):
     def test_allows_the_builtin_mscoree_for_supergiant_reporter(self):
         game = mock.Mock(files={"basecampbugreporter.native.dll"})

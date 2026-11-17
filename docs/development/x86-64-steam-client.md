@@ -99,7 +99,11 @@ arm64 client down first.
   system bus is up (a desktop has none).
 - **FEX settings.** The app's PERFORMANCE_TSO preset (`core/FexPreset.kt`, WinNative's default). FEX's
   own defaults keep half-barrier TSO and full-precision x87, which cost every x86 program time. Values
-  already in the environment win.
+  already in the environment win. On a CPU without LSE2 (no `uscat` in `/proc/cpuinfo`: Cortex-A55,
+  A76, A77, A78) half-barrier TSO stays on: there every unaligned LDAPR/STLR faults, and FEX's
+  non-atomic handler rewrites the instruction into a plain load or store for every later run.
+  `droiddeck-game-env` applies the same rule to games unless a game sets `FEX_HALFBARRIERTSOENABLED`
+  itself; the session log shows `DROIDDECK_FEX_HALF_BARRIER=no-lse2` where it did.
 - **Fast path.** libblfastpath, preloaded into every guest process and so into FEX, broke FEX's 32-bit
   mode (SIGILL at start). It stands down when FEX is about to run a 32-bit program; 64-bit programs
   keep it. `BL_X64_FP_OFF=1` turns it off for everything.

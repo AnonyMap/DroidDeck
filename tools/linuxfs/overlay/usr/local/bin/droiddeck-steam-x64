@@ -738,8 +738,11 @@ export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
 export LIBGL_DRI3_DISABLE=1
 fi
 [ "${BL_X64_FP_OFF:-0}" = 1 ] && export PROOT_FP_OFF=1
+# Without LSE2 ("uscat") FEX's non-atomic unaligned handler drops TSO ordering for good; see droiddeck-game-env.
+x64_half_barrier=0
+if grep -q '^Features' /proc/cpuinfo 2>/dev/null && grep '^Features' /proc/cpuinfo | grep -qvw uscat; then x64_half_barrier=1; fi
 export FEX_TSOENABLED=${FEX_TSOENABLED:-1} FEX_VECTORTSOENABLED=${FEX_VECTORTSOENABLED:-0} \
-  FEX_MEMCPYSETTSOENABLED=${FEX_MEMCPYSETTSOENABLED:-0} FEX_HALFBARRIERTSOENABLED=${FEX_HALFBARRIERTSOENABLED:-0} \
+  FEX_MEMCPYSETTSOENABLED=${FEX_MEMCPYSETTSOENABLED:-0} FEX_HALFBARRIERTSOENABLED=${FEX_HALFBARRIERTSOENABLED:-$x64_half_barrier} \
   FEX_X87REDUCEDPRECISION=${FEX_X87REDUCEDPRECISION:-1} FEX_MULTIBLOCK=${FEX_MULTIBLOCK:-1}
 export HOME=$X64_HOME
 export XDG_DATA_HOME=$X64_HOME/.local/share XDG_CONFIG_HOME=$X64_HOME/.config XDG_CACHE_HOME=$X64_HOME/.cache
